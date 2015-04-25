@@ -1,11 +1,12 @@
 require 'spec_helper'
+require 'fake_bsmobil'
 
-describe FakeBsmobil do
+RSpec.describe FakeBsmobil do
   it 'has a version number' do
-    expect(FakeBsmobil::VERSION).not_to be nil
+    expect(described_class::VERSION).not_to be nil
   end
 
-  it 'does something useful' do
-    expect(false).to eq(true)
+  it 'delegates to bank' do
+    expect(described_class.datastore).to be(described_class.bank.datastore)
   end
 end

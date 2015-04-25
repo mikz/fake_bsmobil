@@ -26,16 +26,29 @@ module FakeBsmobil
       }
     end
 
-    def session_id
-
-    end
-
     plugin :param_matchers
     plugin :header_matchers
     plugin :hash_matcher
+    plugin :cookies
+    plugin :error_handler
+
+
+    def handle_error(exception)
+      case exception
+        when FakeBsmobil::InvalidInputError
+          response.status = exception.status
+          response['Content-Type'] = 'application/json'
+          response.write exception.to_json
+        else raise exception
+      end
+    end
 
     hash_matcher :content_type do |v|
       self.content_type == v
+    end
+
+    def session_id
+      request.cookies['JSESSIONID']
     end
 
     JSON_TYPE = 'application/json'.freeze
@@ -49,7 +62,6 @@ module FakeBsmobil
 
       r.on 'bsmobil/api', accept: 'application/vnd.idk.bsmobil-v2+json', header: 'Content-Type' do |content_type|
 
-
         response.headers.merge!(DEFAULT_HEADERS)
 
         r.post 'session' do
@@ -57,12 +69,22 @@ module FakeBsmobil
 
           begin
             user = FakeBsmobil.session(request.body.read)
-            session = FakeBsmobil.generate_session_id
-            response.headers['Set-Cookie'] = "JSESSIONID=#{session}; Path=/bsmobil"
-            user
+
+            if user
+              response.set_cookie 'JSESSIONID', value: FakeBsmobil.session_id, path: '/bsmobil'
+              user
+            else
+              response.status = 500
+              { errorMessage: 'Z23226: The USERNAME or ACCESS CODE is incorrect. Please enter details again.', code: '' }
+            end
           rescue FakeBsmobil::ValidationError
             validation_error
           end
+        end
+
+        unless FakeBsmobil.find_session(session_id)
+          response.status = 403
+          break { errorMessage: 'Session time out for security. If you wish to re/connect.', code: '' }
         end
 
         r.post 'activeagent' do
